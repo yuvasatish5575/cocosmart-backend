@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { Prisma } from "@prisma/client";
+import mongoose from "mongoose";
 import { ZodError } from "zod";
 import { ApiError } from "../utils/ApiError";
 import { logger } from "../config/logger";
@@ -34,18 +34,22 @@ function toApiError(err: unknown): ApiError {
     return ApiError.badRequest("Validation failed", err.flatten());
   }
 
-  if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    if (err.code === "P2002") {
-      const target = (err.meta?.target as string[] | undefined)?.join(", ") ?? "field";
-      return ApiError.conflict(`A record with this ${target} already exists`);
-    }
-    if (err.code === "P2025") {
-      return ApiError.notFound("Record not found");
-    }
-    if (err.code === "P2003") {
-      return ApiError.badRequest("Referenced record does not exist");
-    }
+  if (err instanceof mongoose.Error.CastError) {
+    return ApiError.badRequest(`Invalid ${err.path}`);
+  }
+
+  if (err instanceof mongoose.Error.ValidationError) {
+    return ApiError.badRequest("Validation failed", err.errors);
+  }
+
+  if (isMongoDuplicateKeyError(err)) {
+    const field = Object.keys(err.keyValue)[0] ?? "field";
+    return ApiError.conflict(`A record with this ${field} already exists`);
   }
 
   return ApiError.internal(isProduction ? "Something went wrong" : String((err as Error)?.message ?? err));
+}
+
+function isMongoDuplicateKeyError(err: unknown): err is { code: 11000; keyValue: Record<string, unknown> } {
+  return typeof err === "object" && err !== null && (err as { code?: number }).code === 11000;
 }

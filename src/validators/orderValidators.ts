@@ -1,7 +1,8 @@
 import { z } from "zod";
+import { objectId } from "./common";
 
 export const checkoutSchema = z.object({
-  addressId: z.string().uuid().optional(),
+  addressId: objectId.optional(),
   /** Accepted when the customer hasn't saved an address yet — becomes a saved address. */
   newAddress: z
     .object({

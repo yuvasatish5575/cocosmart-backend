@@ -1,25 +1,19 @@
 {
   "name": "cocosmart-backend",
   "version": "1.0.0",
-  "description": "CocoSmart e-commerce backend — Node.js, Express, TypeScript, PostgreSQL, Prisma",
+  "description": "CocoSmart e-commerce backend — Node.js, Express, TypeScript, MongoDB, Mongoose",
   "type": "commonjs",
   "main": "dist/src/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.build.json",
     "start": "node dist/src/server.js",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:deploy": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio",
-    "db:local": "tsx scripts/local-postgres.ts",
+    "db:seed": "tsx src/seed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@prisma/client": "6.19.3",
     "argon2": "^0.45.1",
     "compression": "^1.8.1",
     "cors": "^2.8.6",
@@ -28,6 +22,7 @@
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.20.1",
     "morgan": "^1.12.0",
     "nodemailer": "^9.1.1",
     "resend": "^6.26.0",
@@ -46,23 +41,16 @@
     "@types/supertest": "^6.0.3",
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
-    "embedded-postgres": "^18.4.0-beta.17",
-    "prisma": "6.19.3",
+    "mongodb-memory-server": "^11.2.0",
     "supertest": "^7.2.2",
     "tsx": "^4.23.13",
     "typescript": "^6.0.3",
     "vitest": "^3.2.4"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "allowScripts": {
-    "@embedded-postgres/windows-x64@18.4.0-beta.17": true,
-    "@scarf/scarf@1.4.0": true,
     "argon2@0.45.1": true,
     "esbuild@0.28.2": true,
-    "@prisma/client@6.19.3": true,
-    "@prisma/engines@6.19.3": true,
-    "prisma@6.19.3": true
+    "@scarf/scarf@1.4.0": true,
+    "mongodb-memory-server@11.2.0": true
   }
 }

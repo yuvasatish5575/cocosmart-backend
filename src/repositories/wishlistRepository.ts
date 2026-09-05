@@ -1,20 +1,23 @@
-import { prisma } from "../config/prisma";
+import { UserModel, type WishlistEntry } from "../models/User";
+import type { ProductWithCategory } from "./productRepository";
+
+type WishlistEntryWithProduct = Omit<WishlistEntry, "product"> & { product: ProductWithCategory };
 
 export const wishlistRepository = {
-  listForUser(userId: string) {
-    return prisma.wishlist.findMany({
-      where: { userId },
-      include: { product: { include: { category: true } } },
-      orderBy: { createdAt: "desc" },
-    });
+  async listForUser(userId: string): Promise<WishlistEntryWithProduct[]> {
+    const user = await UserModel.findById(userId)
+      .populate<{ wishlist: WishlistEntryWithProduct[] }>({ path: "wishlist.product", populate: { path: "categoryId" } })
+      .lean();
+    return [...(user?.wishlist ?? [])].sort((a, b) => b.addedAt.getTime() - a.addedAt.getTime());
   },
-  find(userId: string, productId: string) {
-    return prisma.wishlist.findUnique({ where: { userId_productId: { userId, productId } } });
+  async find(userId: string, productId: string) {
+    const user = await UserModel.findOne({ _id: userId, "wishlist.product": productId }, { "wishlist.$": 1 }).lean();
+    return user?.wishlist?.[0] ?? null;
   },
   add(userId: string, productId: string) {
-    return prisma.wishlist.create({ data: { userId, productId } });
+    return UserModel.updateOne({ _id: userId }, { $push: { wishlist: { product: productId, addedAt: new Date() } } });
   },
   remove(userId: string, productId: string) {
-    return prisma.wishlist.delete({ where: { userId_productId: { userId, productId } } });
+    return UserModel.updateOne({ _id: userId }, { $pull: { wishlist: { product: productId } } });
   },
 };

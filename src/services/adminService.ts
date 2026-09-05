@@ -19,7 +19,7 @@ export const adminService = {
       ]);
 
     return {
-      totalRevenue: Number(revenue._sum.totalAmount ?? 0),
+      totalRevenue: revenue,
       totalOrders,
       pendingOrders,
       deliveredOrders,

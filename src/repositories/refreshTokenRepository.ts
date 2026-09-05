@@ -1,19 +1,16 @@
-import { prisma } from "../config/prisma";
+import { RefreshTokenModel } from "../models/RefreshToken";
 
 export const refreshTokenRepository = {
   create(data: { userId: string; tokenHash: string; expiresAt: Date }) {
-    return prisma.refreshToken.create({ data });
+    return RefreshTokenModel.create(data);
   },
   findByHash(tokenHash: string) {
-    return prisma.refreshToken.findUnique({ where: { tokenHash } });
+    return RefreshTokenModel.findOne({ tokenHash }).lean();
   },
   revoke(id: string) {
-    return prisma.refreshToken.update({ where: { id }, data: { revokedAt: new Date() } });
+    return RefreshTokenModel.findByIdAndUpdate(id, { revokedAt: new Date() });
   },
   revokeAllForUser(userId: string) {
-    return prisma.refreshToken.updateMany({
-      where: { userId, revokedAt: null },
-      data: { revokedAt: new Date() },
-    });
+    return RefreshTokenModel.updateMany({ userId, revokedAt: null }, { revokedAt: new Date() });
   },
 };

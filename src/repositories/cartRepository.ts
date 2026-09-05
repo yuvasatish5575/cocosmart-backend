@@ -1,38 +1,38 @@
-import { prisma, type PrismaClientOrTx } from "../config/prisma";
+import type { ClientSession } from "mongoose";
+import { CartModel, type CartDoc, type CartItemDoc } from "../models/Cart";
+import type { ProductWithCategory } from "./productRepository";
 
-const cartInclude = {
-  items: {
-    include: { product: { include: { category: true } } },
-    orderBy: { createdAt: "asc" as const },
-  },
-};
+export type CartItemWithProduct = Omit<CartItemDoc, "product"> & { product: ProductWithCategory };
+export type CartWithItems = Omit<CartDoc, "items"> & { items: CartItemWithProduct[] };
+
+const itemsPopulate = { path: "items.product", populate: { path: "categoryId" } };
 
 export const cartRepository = {
   /** Every user has exactly one cart, created lazily on first access. */
-  async getOrCreateForUser(userId: string) {
-    const existing = await prisma.cart.findUnique({ where: { userId }, include: cartInclude });
+  async getOrCreateForUser(userId: string): Promise<CartWithItems> {
+    const existing = await CartModel.findOne({ userId }).populate<{ items: CartItemWithProduct[] }>(itemsPopulate).lean();
     if (existing) return existing;
-    return prisma.cart.create({ data: { userId }, include: cartInclude });
+    // A brand-new cart has no items to populate, so no second query is needed.
+    const created = await CartModel.create({ userId, items: [] });
+    return created.toObject() as unknown as CartWithItems;
   },
-  findItem(cartId: string, productId: string, size: string) {
-    return prisma.cartItem.findUnique({ where: { cartId_productId_size: { cartId, productId, size } } });
+  /** Finds the cart that owns a given item id — combines the ownership check with the lookup. */
+  findCartWithItem(userId: string, itemId: string) {
+    return CartModel.findOne({ userId, "items._id": itemId }).populate<{ items: CartItemWithProduct[] }>(itemsPopulate).lean();
   },
-  findItemById(id: string) {
-    return prisma.cartItem.findUnique({ where: { id }, include: { cart: true } });
+  addItem(cartId: string, data: { product: string; size: string; quantity: number; price: number }) {
+    return CartModel.updateOne({ _id: cartId }, { $push: { items: data } });
   },
-  addItem(data: { cartId: string; productId: string; size: string; quantity: number; price: number }) {
-    return prisma.cartItem.create({ data });
+  incrementItem(cartId: string, itemId: string, byQuantity: number) {
+    return CartModel.updateOne({ _id: cartId, "items._id": itemId }, { $inc: { "items.$.quantity": byQuantity } });
   },
-  incrementItem(id: string, byQuantity: number) {
-    return prisma.cartItem.update({ where: { id }, data: { quantity: { increment: byQuantity } } });
+  setItemQuantity(cartId: string, itemId: string, quantity: number) {
+    return CartModel.updateOne({ _id: cartId, "items._id": itemId }, { $set: { "items.$.quantity": quantity } });
   },
-  setItemQuantity(id: string, quantity: number) {
-    return prisma.cartItem.update({ where: { id }, data: { quantity } });
+  removeItem(cartId: string, itemId: string) {
+    return CartModel.updateOne({ _id: cartId }, { $pull: { items: { _id: itemId } } });
   },
-  removeItem(id: string) {
-    return prisma.cartItem.delete({ where: { id } });
-  },
-  clear(cartId: string, client: PrismaClientOrTx = prisma) {
-    return client.cartItem.deleteMany({ where: { cartId } });
+  clear(cartId: string, session?: ClientSession) {
+    return CartModel.updateOne({ _id: cartId }, { $set: { items: [] } }, { session });
   },
 };

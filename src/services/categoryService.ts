@@ -21,7 +21,7 @@ export const categoryService = {
     const existing = await categoryRepository.findById(id);
     if (!existing) throw ApiError.notFound("Category not found");
     const category = await categoryRepository.update(id, input);
-    return toPublicCategory(category);
+    return toPublicCategory(category!);
   },
 
   async remove(id: string) {

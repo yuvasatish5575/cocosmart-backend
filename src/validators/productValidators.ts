@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { objectId } from "./common";
 
 const productTone = z.enum(["coconut", "leaf", "gold", "cream", "charcoal"]);
 
@@ -48,7 +49,7 @@ export const productListQuerySchema = z.object({
 });
 
 export const createProductSchema = z.object({
-  categoryId: z.string().uuid(),
+  categoryId: objectId,
   name: z.string().trim().min(2).max(150),
   slug: z
     .string()
@@ -82,7 +83,7 @@ export const createProductSchema = z.object({
 
 export const updateProductSchema = z
   .object({
-    categoryId: z.string().uuid(),
+    categoryId: objectId,
     name: z.string().trim().min(2).max(150),
     slug: z
       .string()
@@ -112,5 +113,5 @@ export const updateProductSchema = z
   })
   .partial();
 
-export const idParamSchema = z.object({ id: z.string().uuid() });
+export const idParamSchema = z.object({ id: objectId });
 export const slugParamSchema = z.object({ slug: z.string().trim().min(1) });

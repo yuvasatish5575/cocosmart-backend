@@ -1,19 +1,16 @@
-import { prisma } from "../config/prisma";
+import { PasswordResetTokenModel } from "../models/PasswordResetToken";
 
 export const passwordResetTokenRepository = {
   create(data: { userId: string; tokenHash: string; expiresAt: Date }) {
-    return prisma.passwordResetToken.create({ data });
+    return PasswordResetTokenModel.create(data);
   },
   findByHash(tokenHash: string) {
-    return prisma.passwordResetToken.findUnique({ where: { tokenHash } });
+    return PasswordResetTokenModel.findOne({ tokenHash }).lean();
   },
   markUsed(id: string) {
-    return prisma.passwordResetToken.update({ where: { id }, data: { usedAt: new Date() } });
+    return PasswordResetTokenModel.findByIdAndUpdate(id, { usedAt: new Date() });
   },
   invalidateAllForUser(userId: string) {
-    return prisma.passwordResetToken.updateMany({
-      where: { userId, usedAt: null },
-      data: { usedAt: new Date() },
-    });
+    return PasswordResetTokenModel.updateMany({ userId, usedAt: null }, { usedAt: new Date() });
   },
 };

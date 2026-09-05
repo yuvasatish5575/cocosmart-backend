@@ -1,63 +1,68 @@
-import { prisma, type PrismaClientOrTx } from "../config/prisma";
-import type { OrderStatus, Prisma } from "@prisma/client";
+import type { ClientSession, Types } from "mongoose";
+import { OrderModel, type OrderDoc, type OrderItemDoc, type OrderStatus } from "../models/Order";
 
-const orderInclude = {
-  items: true,
-  address: true,
-};
+type OrderCustomer = { _id: Types.ObjectId; name: string; email: string };
+
+type OrderCreateData = Omit<
+  Pick<OrderDoc, "userId" | "orderNumber" | "subtotal" | "totalAmount" | "paymentMethod" | "shippingAddress">,
+  "userId"
+> & { userId: string } & Partial<
+    Omit<Pick<OrderDoc, "discount" | "shippingCost" | "tax" | "paymentStatus" | "orderStatus" | "addressId" | "deliverySlot">, "addressId"> & {
+      addressId: string | null;
+    }
+  > & {
+    items: Array<Omit<Pick<OrderItemDoc, "product" | "productName" | "size" | "price" | "quantity" | "total">, "product"> & { product: string | OrderItemDoc["product"] }>;
+  };
 
 export const orderRepository = {
-  create(data: Prisma.OrderCreateInput, client: PrismaClientOrTx = prisma) {
-    return client.order.create({ data, include: orderInclude });
+  async create(data: OrderCreateData, session?: ClientSession) {
+    const [order] = await OrderModel.create([data], { session });
+    return order!.toObject();
   },
   findById(id: string) {
-    return prisma.order.findUnique({ where: { id }, include: orderInclude });
+    return OrderModel.findById(id).lean();
   },
-  listForUser(userId: string, params: { skip: number; take: number }) {
-    return prisma.$transaction([
-      prisma.order.findMany({
-        where: { userId },
-        orderBy: { createdAt: "desc" },
-        skip: params.skip,
-        take: params.take,
-        include: orderInclude,
-      }),
-      prisma.order.count({ where: { userId } }),
+  async listForUser(userId: string, params: { skip: number; take: number }) {
+    const [rows, total] = await Promise.all([
+      OrderModel.find({ userId }).sort({ createdAt: -1 }).skip(params.skip).limit(params.take).lean(),
+      OrderModel.countDocuments({ userId }),
     ]);
+    return [rows, total] as const;
   },
-  listAll(params: { skip: number; take: number; status?: OrderStatus }) {
-    const where: Prisma.OrderWhereInput = params.status ? { orderStatus: params.status } : {};
-    return prisma.$transaction([
-      prisma.order.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: params.skip,
-        take: params.take,
-        include: { ...orderInclude, user: { select: { id: true, name: true, email: true } } },
-      }),
-      prisma.order.count({ where }),
+  async listAll(params: { skip: number; take: number; status?: OrderStatus }) {
+    const where = params.status ? { orderStatus: params.status } : {};
+    const [rows, total] = await Promise.all([
+      OrderModel.find(where)
+        .sort({ createdAt: -1 })
+        .skip(params.skip)
+        .limit(params.take)
+        .populate<{ userId: OrderCustomer }>({ path: "userId", select: "name email" })
+        .lean(),
+      OrderModel.countDocuments(where),
     ]);
+    return [rows, total] as const;
   },
   updateStatus(id: string, orderStatus: OrderStatus) {
-    return prisma.order.update({ where: { id }, data: { orderStatus }, include: orderInclude });
+    return OrderModel.findByIdAndUpdate(id, { orderStatus }, { new: true }).lean();
   },
   recentForDashboard(take = 5) {
-    return prisma.order.findMany({
-      orderBy: { createdAt: "desc" },
-      take,
-      include: { user: { select: { name: true, email: true } } },
-    });
+    return OrderModel.find()
+      .sort({ createdAt: -1 })
+      .limit(take)
+      .populate<{ userId: OrderCustomer }>({ path: "userId", select: "name email" })
+      .lean();
   },
-  aggregateRevenue() {
-    return prisma.order.aggregate({
-      where: { paymentStatus: "PAID" },
-      _sum: { totalAmount: true },
-    });
+  async aggregateRevenue() {
+    const [result] = await OrderModel.aggregate([
+      { $match: { paymentStatus: "PAID" } },
+      { $group: { _id: null, total: { $sum: "$totalAmount" } } },
+    ]);
+    return result?.total ?? 0;
   },
   countByStatus(status: OrderStatus) {
-    return prisma.order.count({ where: { orderStatus: status } });
+    return OrderModel.countDocuments({ orderStatus: status });
   },
   count() {
-    return prisma.order.count();
+    return OrderModel.countDocuments();
   },
 };

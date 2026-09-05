@@ -4,7 +4,6 @@ import { ApiError } from "../utils/ApiError";
 import { toPublicProduct } from "../utils/presenters";
 import { paginationMeta, toSkipTake } from "../utils/pagination";
 import type { CreateProductInput, ProductListQuery, UpdateProductInput } from "../types/dto";
-import type { Prisma } from "@prisma/client";
 
 export const productService = {
   async list(query: ProductListQuery, opts: { activeOnly: boolean }) {
@@ -46,6 +45,7 @@ export const productService = {
     if (!category) throw ApiError.badRequest("categoryId does not reference an existing category");
 
     const product = await productRepository.create({
+      categoryId: input.categoryId,
       name: input.name,
       slug: input.slug,
       description: input.description,
@@ -59,15 +59,14 @@ export const productService = {
       image: input.image,
       images: input.images,
       tone: input.tone,
-      benefits: input.benefits as unknown as Prisma.InputJsonValue,
+      benefits: input.benefits,
       ingredients: input.ingredients,
-      nutritionalInformation: input.nutritionalInformation as unknown as Prisma.InputJsonValue,
+      nutritionalInformation: input.nutritionalInformation,
       storage: input.storage,
       origin: input.origin,
-      traceability: (input.traceability ?? undefined) as unknown as Prisma.InputJsonValue,
+      traceability: input.traceability ?? undefined,
       isFeatured: input.isFeatured,
       isActive: input.isActive,
-      category: { connect: { id: input.categoryId } },
     });
     return toPublicProduct(product);
   },
@@ -81,15 +80,8 @@ export const productService = {
       if (!category) throw ApiError.badRequest("categoryId does not reference an existing category");
     }
 
-    const { categoryId, benefits, nutritionalInformation, traceability, ...rest } = input;
-    const product = await productRepository.update(id, {
-      ...rest,
-      ...(benefits !== undefined ? { benefits: benefits as unknown as Prisma.InputJsonValue } : {}),
-      ...(nutritionalInformation !== undefined ? { nutritionalInformation: nutritionalInformation as unknown as Prisma.InputJsonValue } : {}),
-      ...(traceability !== undefined ? { traceability: (traceability ?? undefined) as unknown as Prisma.InputJsonValue } : {}),
-      ...(categoryId ? { category: { connect: { id: categoryId } } } : {}),
-    });
-    return toPublicProduct(product);
+    const product = await productRepository.update(id, input);
+    return toPublicProduct(product!);
   },
 
   /** Soft delete — deactivates rather than hard-deletes so historical orders keep a valid product reference. */

@@ -10,7 +10,7 @@ export default defineConfig({
     // would let e.g. the stock-depletion test in orders.test.ts race against
     // products.test.ts reading the same rows.
     fileParallelism: false,
-    setupFiles: ["./tests/testEnv.ts"],
+    setupFiles: ["./tests/testEnv.ts", "./tests/setupDb.ts"],
     globalSetup: ["./tests/globalSetup.ts"],
   },
 });

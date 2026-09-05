@@ -1,9 +1,11 @@
-import type { Category, Order, OrderItem, Product, User } from "@prisma/client";
+import type { Types } from "mongoose";
 import { stockLabel } from "./productPresentation";
+import type { UserDoc } from "../models/User";
+import type { CategoryDoc } from "../models/Category";
+import type { OrderDoc, OrderItemDoc } from "../models/Order";
+import type { ProductWithCategory } from "../repositories/productRepository";
 
-type OrderWithItems = Order & { items: OrderItem[]; user?: { id: string; name: string; email: string } | null };
-
-type ProductWithCategory = Product & { category: Category };
+type Id = Types.ObjectId | string;
 
 /**
  * Maps the normalized DB row onto the flat shape the existing frontend's
@@ -12,23 +14,23 @@ type ProductWithCategory = Product & { category: Category };
  * redesign to consume real data.
  */
 export function toPublicProduct(product: ProductWithCategory) {
-  const price = Number(product.price);
-  const discountPrice = product.discountPrice ? Number(product.discountPrice) : null;
+  const price = product.price;
+  const discountPrice = product.discountPrice ? product.discountPrice : null;
   const effectivePrice = discountPrice ?? price;
 
   return {
-    id: product.id,
+    id: product._id.toString(),
     slug: product.slug,
     name: product.name,
-    category: product.category.name,
-    categorySlug: product.category.slug,
+    category: product.categoryId.name,
+    categorySlug: product.categoryId.slug,
     shortDescription: product.shortDescription,
     description: product.description,
     price: effectivePrice,
     mrp: discountPrice ? price : undefined,
     sku: product.sku,
     sizes: product.sizes,
-    rating: Number(product.rating),
+    rating: product.rating,
     reviewCount: product.reviewCount,
     stock: stockLabel(product.stockQuantity),
     stockQuantity: product.stockQuantity,
@@ -48,9 +50,9 @@ export function toPublicProduct(product: ProductWithCategory) {
   };
 }
 
-export function toPublicCategory(category: Category) {
+export function toPublicCategory(category: CategoryDoc) {
   return {
-    id: category.id,
+    id: category._id.toString(),
     name: category.name,
     slug: category.slug,
     description: category.description ?? "",
@@ -60,53 +62,60 @@ export function toPublicCategory(category: Category) {
   };
 }
 
+type OrderWithItems = Omit<OrderDoc, "userId"> & { userId: Id | { _id: Id; name: string; email: string } };
+
+function customerFrom(userId: OrderWithItems["userId"]): { id: string; name: string; email: string } | undefined {
+  if (userId && typeof userId === "object" && "name" in userId) {
+    return { id: userId._id.toString(), name: userId.name, email: userId.email };
+  }
+  return undefined;
+}
+
 export function toPublicOrder(order: OrderWithItems) {
   return {
-    id: order.id,
+    id: order._id.toString(),
     orderNumber: order.orderNumber,
     orderStatus: order.orderStatus,
     paymentStatus: order.paymentStatus,
     paymentMethod: order.paymentMethod,
-    subtotal: Number(order.subtotal),
-    discount: Number(order.discount),
-    shippingCost: Number(order.shippingCost),
-    tax: Number(order.tax),
-    totalAmount: Number(order.totalAmount),
+    subtotal: order.subtotal,
+    discount: order.discount,
+    shippingCost: order.shippingCost,
+    tax: order.tax,
+    totalAmount: order.totalAmount,
     shippingAddress: order.shippingAddress,
     deliverySlot: order.deliverySlot ?? undefined,
-    items: order.items.map((item) => ({
-      id: item.id,
-      productId: item.productId,
+    items: order.items.map((item: OrderItemDoc) => ({
+      id: item._id.toString(),
+      productId: item.product.toString(),
       productName: item.productName,
       size: item.size,
-      price: Number(item.price),
+      price: item.price,
       quantity: item.quantity,
-      total: Number(item.total),
+      total: item.total,
     })),
-    customer: order.user ?? undefined,
+    customer: customerFrom(order.userId),
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
   };
 }
 
-type OrderSummaryRow = Order & { user: { name: string; email: string } | null };
-
 /** Lighter than toPublicOrder — for dashboard "recent orders" lists that don't need line items. */
-export function toOrderSummary(order: OrderSummaryRow) {
+export function toOrderSummary(order: OrderWithItems) {
   return {
-    id: order.id,
+    id: order._id.toString(),
     orderNumber: order.orderNumber,
     orderStatus: order.orderStatus,
     paymentStatus: order.paymentStatus,
-    totalAmount: Number(order.totalAmount),
-    customer: order.user ?? undefined,
+    totalAmount: order.totalAmount,
+    customer: customerFrom(order.userId),
     createdAt: order.createdAt,
   };
 }
 
-export function toPublicUser(user: User) {
+export function toPublicUser(user: UserDoc) {
   return {
-    id: user.id,
+    id: user._id.toString(),
     name: user.name,
     email: user.email,
     phone: user.phone ?? undefined,

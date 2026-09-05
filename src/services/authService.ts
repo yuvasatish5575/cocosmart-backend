@@ -44,7 +44,7 @@ export const authService = {
       passwordHash,
       phone: input.phone,
     });
-    const tokens = await issueTokens(user.id, user.role);
+    const tokens = await issueTokens(user._id.toString(), user.role);
     return { user: toPublicUser(user), ...tokens };
   },
 
@@ -58,7 +58,7 @@ export const authService = {
     if (!user.isActive) {
       throw ApiError.forbidden("This account has been deactivated");
     }
-    const tokens = await issueTokens(user.id, user.role);
+    const tokens = await issueTokens(user._id.toString(), user.role);
     return { user: toPublicUser(user), ...tokens };
   },
 
@@ -71,7 +71,7 @@ export const authService = {
     }
 
     const stored = await refreshTokenRepository.findByHash(hashToken(refreshToken));
-    if (!stored || stored.revokedAt || stored.expiresAt < new Date() || stored.userId !== payload.sub) {
+    if (!stored || stored.revokedAt || stored.expiresAt < new Date() || stored.userId.toString() !== payload.sub) {
       throw ApiError.unauthorized("Invalid or expired refresh token");
     }
 
@@ -81,14 +81,14 @@ export const authService = {
     }
 
     // Rotate: revoke the used token and issue a fresh pair.
-    await refreshTokenRepository.revoke(stored.id);
-    const tokens = await issueTokens(user.id, user.role);
+    await refreshTokenRepository.revoke(stored._id.toString());
+    const tokens = await issueTokens(user._id.toString(), user.role);
     return { user: toPublicUser(user), ...tokens };
   },
 
   async logout(refreshToken: string) {
     const stored = await refreshTokenRepository.findByHash(hashToken(refreshToken)).catch(() => null);
-    if (stored) await refreshTokenRepository.revoke(stored.id);
+    if (stored) await refreshTokenRepository.revoke(stored._id.toString());
   },
 
   async me(userId: string) {
@@ -103,11 +103,11 @@ export const authService = {
     // is registered — otherwise the endpoint becomes an account-enumeration oracle.
     if (!user || !user.isActive) return;
 
-    await passwordResetTokenRepository.invalidateAllForUser(user.id);
+    await passwordResetTokenRepository.invalidateAllForUser(user._id.toString());
 
     const token = crypto.randomBytes(32).toString("hex");
     await passwordResetTokenRepository.create({
-      userId: user.id,
+      userId: user._id.toString(),
       tokenHash: hashToken(token),
       expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS),
     });
@@ -123,10 +123,11 @@ export const authService = {
     }
 
     const passwordHash = await hashPassword(newPassword);
-    await userRepository.update(stored.userId, { passwordHash });
-    await passwordResetTokenRepository.markUsed(stored.id);
+    const userId = stored.userId.toString();
+    await userRepository.update(userId, { passwordHash });
+    await passwordResetTokenRepository.markUsed(stored._id.toString());
     // A password reset is a strong signal the account may have been at risk —
     // revoke every existing session rather than leaving old refresh tokens valid.
-    await refreshTokenRepository.revokeAllForUser(stored.userId);
+    await refreshTokenRepository.revokeAllForUser(userId);
   },
 };

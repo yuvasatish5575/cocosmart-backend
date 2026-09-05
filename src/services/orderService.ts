@@ -1,4 +1,4 @@
-import { prisma } from "../config/prisma";
+import mongoose from "mongoose";
 import { cartRepository } from "../repositories/cartRepository";
 import { orderRepository } from "../repositories/orderRepository";
 import { productRepository } from "../repositories/productRepository";
@@ -9,7 +9,7 @@ import { paginationMeta, toSkipTake } from "../utils/pagination";
 import { generateOrderNumber } from "../utils/orderNumber";
 import { DELIVERY_FEE, FREE_DELIVERY_THRESHOLD, TAX_RATE } from "../config/constants";
 import type { CheckoutInput, OrderListQuery } from "../types/dto";
-import type { OrderStatus, Prisma } from "@prisma/client";
+import type { OrderItemDoc, OrderStatus } from "../models/Order";
 
 export const orderService = {
   /**
@@ -17,6 +17,7 @@ export const orderService = {
    * insufficient for *any* line, or any write fails, everything rolls back —
    * the customer is never charged for a partially-fulfilled order and stock
    * never goes negative (see productRepository.decrementStockIfAvailable).
+   * Requires MongoDB to be running as a replica set (any Atlas cluster is).
    */
   async checkout(userId: string, input: CheckoutInput) {
     const cart = await cartRepository.getOrCreateForUser(userId);
@@ -24,12 +25,12 @@ export const orderService = {
       throw ApiError.badRequest("Your cart is empty");
     }
 
-    let addressId = input.addressId;
-    let addressSnapshot: Prisma.JsonObject;
+    let addressId: string | undefined = input.addressId;
+    let addressSnapshot: Record<string, unknown>;
 
     if (addressId) {
       const address = await addressRepository.findById(addressId);
-      if (!address || address.userId !== userId) throw ApiError.notFound("Address not found");
+      if (!address || address.userId.toString() !== userId) throw ApiError.notFound("Address not found");
       addressSnapshot = {
         fullName: address.fullName,
         phone: address.phone,
@@ -41,8 +42,8 @@ export const orderService = {
         country: address.country,
       };
     } else if (input.newAddress) {
-      const created = await addressRepository.create({ ...input.newAddress, user: { connect: { id: userId } } });
-      addressId = created.id;
+      const created = await addressRepository.create(userId, input.newAddress);
+      addressId = created._id.toString();
       addressSnapshot = {
         fullName: created.fullName,
         phone: created.phone,
@@ -58,70 +59,75 @@ export const orderService = {
       throw ApiError.badRequest("An address is required");
     }
 
-    const order = await prisma.$transaction(async (tx) => {
-      let subtotal = 0;
-      let discount = 0;
-      const orderItemsData: Prisma.OrderItemCreateManyOrderInput[] = [];
+    const session = await mongoose.startSession();
+    try {
+      const order = await session.withTransaction(async () => {
+        let subtotal = 0;
+        let discount = 0;
+        const orderItemsData: Array<Pick<OrderItemDoc, "product" | "productName" | "size" | "price" | "quantity" | "total">> = [];
 
-      for (const cartItem of cart.items) {
-        // Re-read the product *inside* the transaction — never trust the
-        // cart's snapshot price, and never trust the client. This is the
-        // authoritative price/availability check for the order being placed.
-        const product = await productRepository.findById(cartItem.productId, tx);
-        if (!product || !product.isActive) {
-          throw ApiError.badRequest(`"${cartItem.product.name}" is no longer available`);
+        for (const cartItem of cart.items) {
+          // Re-read the product *inside* the transaction — never trust the
+          // cart's snapshot price, and never trust the client. This is the
+          // authoritative price/availability check for the order being placed.
+          const product = await productRepository.findById(cartItem.product._id.toString(), session);
+          if (!product || !product.isActive) {
+            throw ApiError.badRequest(`"${cartItem.product.name}" is no longer available`);
+          }
+
+          const listPrice = product.price;
+          const effectivePrice = product.discountPrice ? product.discountPrice : listPrice;
+
+          const decremented = await productRepository.decrementStockIfAvailable(product._id.toString(), cartItem.quantity, session);
+          if (!decremented) {
+            throw ApiError.insufficientStock(`Only ${product.stockQuantity} unit(s) of "${product.name}" available`);
+          }
+
+          subtotal += effectivePrice * cartItem.quantity;
+          discount += (listPrice - effectivePrice) * cartItem.quantity;
+          orderItemsData.push({
+            product: product._id,
+            productName: product.name,
+            size: cartItem.size,
+            price: effectivePrice,
+            quantity: cartItem.quantity,
+            total: effectivePrice * cartItem.quantity,
+          });
         }
 
-        const listPrice = Number(product.price);
-        const effectivePrice = product.discountPrice ? Number(product.discountPrice) : listPrice;
+        const shippingCost = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE;
+        const tax = Math.round(subtotal * TAX_RATE * 100) / 100;
+        const totalAmount = subtotal + shippingCost + tax;
 
-        const decremented = await productRepository.decrementStockIfAvailable(product.id, cartItem.quantity, tx);
-        if (!decremented) {
-          throw ApiError.insufficientStock(`Only ${product.stockQuantity} unit(s) of "${product.name}" available`);
-        }
+        const created = await orderRepository.create(
+          {
+            userId,
+            orderNumber: generateOrderNumber(),
+            subtotal,
+            discount,
+            shippingCost,
+            tax,
+            totalAmount,
+            paymentMethod: input.paymentMethod,
+            paymentStatus: "PENDING",
+            orderStatus: "PENDING",
+            shippingAddress: addressSnapshot,
+            addressId,
+            deliverySlot: input.deliverySlot,
+            items: orderItemsData,
+          },
+          session
+        );
 
-        subtotal += effectivePrice * cartItem.quantity;
-        discount += (listPrice - effectivePrice) * cartItem.quantity;
-        orderItemsData.push({
-          productId: product.id,
-          productName: product.name,
-          size: cartItem.size,
-          price: effectivePrice,
-          quantity: cartItem.quantity,
-          total: effectivePrice * cartItem.quantity,
-        });
-      }
+        await cartRepository.clear(cart._id.toString(), session);
 
-      const shippingCost = subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE;
-      const tax = Math.round(subtotal * TAX_RATE * 100) / 100;
-      const totalAmount = subtotal + shippingCost + tax;
+        return created;
+      });
 
-      const created = await orderRepository.create(
-        {
-          orderNumber: generateOrderNumber(),
-          subtotal,
-          discount,
-          shippingCost,
-          tax,
-          totalAmount,
-          paymentMethod: input.paymentMethod,
-          paymentStatus: "PENDING",
-          orderStatus: "PENDING",
-          shippingAddress: addressSnapshot,
-          deliverySlot: input.deliverySlot,
-          user: { connect: { id: userId } },
-          address: addressId ? { connect: { id: addressId } } : undefined,
-          items: { createMany: { data: orderItemsData } },
-        },
-        tx
-      );
-
-      await cartRepository.clear(cart.id, tx);
-
-      return created;
-    });
-
-    return toPublicOrder(order);
+      return toPublicOrder(order);
+    } finally {
+      await session.endSession();
+    }
   },
 
   async listForUser(userId: string, query: OrderListQuery) {
@@ -136,7 +142,7 @@ export const orderService = {
   async getById(userId: string, role: "CUSTOMER" | "ADMIN", orderId: string) {
     const order = await orderRepository.findById(orderId);
     if (!order) throw ApiError.notFound("Order not found");
-    if (role !== "ADMIN" && order.userId !== userId) {
+    if (role !== "ADMIN" && order.userId.toString() !== userId) {
       // 404, not 403 — don't confirm to a probing user that the order ID exists.
       throw ApiError.notFound("Order not found");
     }
@@ -156,6 +162,6 @@ export const orderService = {
     const existing = await orderRepository.findById(orderId);
     if (!existing) throw ApiError.notFound("Order not found");
     const order = await orderRepository.updateStatus(orderId, orderStatus);
-    return toPublicOrder(order);
+    return toPublicOrder(order!);
   },
 };

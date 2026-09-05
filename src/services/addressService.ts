@@ -11,12 +11,12 @@ export const addressService = {
     if (input.isDefault) {
       await addressRepository.clearDefaultForUser(userId);
     }
-    return addressRepository.create({ ...input, user: { connect: { id: userId } } });
+    return addressRepository.create(userId, input);
   },
 
   async update(userId: string, addressId: string, input: UpdateAddressInput) {
     const existing = await addressRepository.findById(addressId);
-    if (!existing || existing.userId !== userId) throw ApiError.notFound("Address not found");
+    if (!existing || existing.userId.toString() !== userId) throw ApiError.notFound("Address not found");
     if (input.isDefault) {
       await addressRepository.clearDefaultForUser(userId);
     }
@@ -25,7 +25,7 @@ export const addressService = {
 
   async remove(userId: string, addressId: string) {
     const existing = await addressRepository.findById(addressId);
-    if (!existing || existing.userId !== userId) throw ApiError.notFound("Address not found");
+    if (!existing || existing.userId.toString() !== userId) throw ApiError.notFound("Address not found");
     await addressRepository.delete(addressId);
   },
 };

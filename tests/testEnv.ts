@@ -6,7 +6,10 @@
  * two entry points runs first "wins" and both end up seeing the same values.
  */
 process.env.NODE_ENV = "test";
-process.env.DATABASE_URL ??= "postgresql://cocosmart:cocosmart@127.0.0.1:5433/cocosmart_test";
+// DATABASE_URL is deliberately not defaulted here — globalSetup.ts either
+// uses one already set (e.g. a dedicated MongoDB Atlas test database, for
+// CI) or spins up a disposable local replica set and sets it, then that
+// choice propagates to these worker processes via inherited env vars.
 process.env.JWT_ACCESS_SECRET ??= "test_access_secret_do_not_use_in_prod_12345";
 process.env.JWT_REFRESH_SECRET ??= "test_refresh_secret_do_not_use_in_prod_67890";
 process.env.JWT_ACCESS_EXPIRES_IN ??= "15m";

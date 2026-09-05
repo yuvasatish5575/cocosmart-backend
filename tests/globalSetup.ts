@@ -1,36 +1,37 @@
 import "./testEnv";
 import { execSync } from "node:child_process";
-import { PrismaClient } from "@prisma/client";
+import mongoose from "mongoose";
+import { MongoMemoryReplSet } from "mongodb-memory-server";
 
 /**
  * Runs once before the whole test run, in the main Vitest process (its
  * `process.env` mutations propagate to the workers spawned afterwards).
- * Points schema push + seeding at a dedicated `cocosmart_test` database on
- * the same local Postgres instance `npm run db:local` starts.
  *
- * Deliberately avoids `prisma db push --force-reset` / `prisma migrate
- * reset` — Prisma CLI refuses those from an AI agent without explicit human
- * sign-off (a safety guard worth keeping). Idempotency across repeated runs
- * is handled instead by truncating every table through our own Prisma
- * Client (an ordinary application-level query against a database that only
- * this test suite uses), then re-seeding.
+ * Checkout runs inside a multi-document transaction, which MongoDB only
+ * supports on a replica set. If DATABASE_URL isn't already set (e.g. to a
+ * MongoDB Atlas test database for CI), this spins up a real, disposable
+ * single-node replica set with no external service required — the MongoDB
+ * equivalent of what `embedded-postgres` gave the old Postgres setup.
+ *
+ * Either way, the target database is dropped for idempotency across
+ * repeated runs, then re-seeded through the same script `npm run db:seed` uses.
  */
 export default async function globalSetup() {
-  execSync("npx prisma db push --skip-generate --accept-data-loss", { stdio: "inherit", env: process.env });
-
-  const prisma = new PrismaClient();
-  try {
-    const tables = await prisma.$queryRaw<{ tablename: string }[]>`
-      SELECT tablename FROM pg_tables
-      WHERE schemaname = 'public' AND tablename != '_prisma_migrations'
-    `;
-    if (tables.length > 0) {
-      const names = tables.map((t) => `"public"."${t.tablename}"`).join(", ");
-      await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${names} RESTART IDENTITY CASCADE;`);
-    }
-  } finally {
-    await prisma.$disconnect();
+  let replSet: MongoMemoryReplSet | undefined;
+  if (!process.env.DATABASE_URL) {
+    replSet = await MongoMemoryReplSet.create({
+      replSet: { count: 1, dbName: "cocosmart_test", storageEngine: "wiredTiger" },
+    });
+    process.env.DATABASE_URL = replSet.getUri("cocosmart_test");
   }
 
-  execSync("npx tsx prisma/seed.ts", { stdio: "inherit", env: process.env });
+  const connection = await mongoose.createConnection(process.env.DATABASE_URL).asPromise();
+  await connection.dropDatabase();
+  await connection.close();
+
+  execSync("npx tsx src/seed.ts", { stdio: "inherit", env: process.env });
+
+  return async () => {
+    await replSet?.stop();
+  };
 }

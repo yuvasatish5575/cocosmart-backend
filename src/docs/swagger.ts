@@ -33,5 +33,8 @@ export const swaggerSpec = swaggerJsdoc({
       },
     },
   },
-  apis: [path.join(__dirname, "../routes/*.ts"), path.join(__dirname, "../routes/*.js")],
+  apis: [
+    path.join(__dirname, "../routes/*.ts").split(path.sep).join("/"),
+    path.join(__dirname, "../routes/*.js").split(path.sep).join("/"),
+  ],
 });

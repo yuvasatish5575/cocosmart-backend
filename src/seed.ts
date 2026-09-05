@@ -1,9 +1,12 @@
-import { PrismaClient } from "@prisma/client";
 import "dotenv/config";
-import { hashPassword } from "../src/utils/password";
-import { generateOrderNumber } from "../src/utils/orderNumber";
-
-const prisma = new PrismaClient();
+import { connectDB, disconnectDB } from "./config/db";
+import { CategoryModel } from "./models/Category";
+import { ProductModel } from "./models/Product";
+import { UserModel } from "./models/User";
+import { AddressModel } from "./models/Address";
+import { OrderModel } from "./models/Order";
+import { hashPassword } from "./utils/password";
+import { generateOrderNumber } from "./utils/orderNumber";
 
 const waterBenefits = [
   { title: "Naturally Hydrating", description: "Drawn from tender coconuts, lightly filtered, nothing added.", icon: "droplet" },
@@ -344,15 +347,17 @@ const products = [
 ];
 
 async function main() {
+  await connectDB();
+
   console.log("Seeding categories...");
   const categoryIdBySlug = new Map<string, string>();
   for (const c of categories) {
-    const row = await prisma.category.upsert({
-      where: { slug: c.slug },
-      update: { name: c.name, description: c.description, tone: c.tone },
-      create: c,
-    });
-    categoryIdBySlug.set(c.slug, row.id);
+    const row = await CategoryModel.findOneAndUpdate(
+      { slug: c.slug },
+      { $set: { name: c.name, description: c.description, tone: c.tone } },
+      { upsert: true, new: true }
+    );
+    categoryIdBySlug.set(c.slug, row._id.toString());
   }
 
   console.log("Seeding products...");
@@ -361,93 +366,82 @@ async function main() {
     const { categorySlug, ...data } = p;
     const categoryId = categoryIdBySlug.get(categorySlug);
     if (!categoryId) throw new Error(`Unknown category slug: ${categorySlug}`);
-    const row = await prisma.product.upsert({
-      where: { slug: p.slug },
-      update: { ...data, ...productMedia[data.slug], categoryId },
-      create: { ...data, ...productMedia[data.slug], categoryId },
-    });
-    productIdBySlug.set(p.slug, row.id);
+    const row = await ProductModel.findOneAndUpdate(
+      { slug: p.slug },
+      { $set: { ...data, ...productMedia[data.slug], categoryId } },
+      { upsert: true, new: true }
+    );
+    productIdBySlug.set(p.slug, row._id.toString());
   }
 
   console.log("Seeding users...");
   const adminEmail = process.env.SEED_ADMIN_EMAIL ?? "admin@cocosmart.test";
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
-  await prisma.user.upsert({
-    where: { email: adminEmail },
-    update: {},
-    create: {
-      name: "CocoSmart Admin",
-      email: adminEmail,
-      passwordHash: await hashPassword(adminPassword),
-      role: "ADMIN",
-    },
-  });
+  await UserModel.findOneAndUpdate(
+    { email: adminEmail },
+    { $setOnInsert: { name: "CocoSmart Admin", email: adminEmail, passwordHash: await hashPassword(adminPassword), role: "ADMIN" } },
+    { upsert: true, new: true }
+  );
 
-  const demoCustomer = await prisma.user.upsert({
-    where: { email: "tarun@example.com" },
-    update: {},
-    create: {
-      name: "Tarun Sharma",
-      email: "tarun@example.com",
-      passwordHash: await hashPassword("Customer123!"),
-      role: "CUSTOMER",
-      phone: "9876543210",
+  const demoCustomer = await UserModel.findOneAndUpdate(
+    { email: "tarun@example.com" },
+    {
+      $setOnInsert: {
+        name: "Tarun Sharma",
+        email: "tarun@example.com",
+        passwordHash: await hashPassword("Customer123!"),
+        role: "CUSTOMER",
+        phone: "9876543210",
+      },
     },
-  });
+    { upsert: true, new: true }
+  );
 
   console.log("Seeding a demo address + order for the demo customer...");
-  const existingAddress = await prisma.address.findFirst({ where: { userId: demoCustomer.id } });
+  const existingAddress = await AddressModel.findOne({ userId: demoCustomer._id });
   const address =
     existingAddress ??
-    (await prisma.address.create({
-      data: {
-        userId: demoCustomer.id,
-        fullName: "Tarun Sharma",
-        phone: "9876543210",
-        addressLine1: "221B Palm Grove Road",
-        city: "Hyderabad",
-        state: "Telangana",
-        postalCode: "500081",
-        country: "India",
-        isDefault: true,
-      },
+    (await AddressModel.create({
+      userId: demoCustomer._id,
+      fullName: "Tarun Sharma",
+      phone: "9876543210",
+      addressLine1: "221B Palm Grove Road",
+      city: "Hyderabad",
+      state: "Telangana",
+      postalCode: "500081",
+      country: "India",
+      isDefault: true,
     }));
 
-  const hasOrder = await prisma.order.findFirst({ where: { userId: demoCustomer.id } });
+  const hasOrder = await OrderModel.findOne({ userId: demoCustomer._id });
   if (!hasOrder) {
     const waterId = productIdBySlug.get("tender-coconut-water")!;
     const oilId = productIdBySlug.get("virgin-coconut-oil")!;
-    await prisma.order.create({
-      data: {
-        userId: demoCustomer.id,
-        orderNumber: generateOrderNumber(),
-        subtotal: 460,
-        discount: 60,
-        shippingCost: 0,
-        tax: 0,
-        totalAmount: 460,
-        paymentMethod: "UPI",
-        paymentStatus: "PAID",
-        orderStatus: "DELIVERED",
-        addressId: address.id,
-        shippingAddress: {
-          fullName: address.fullName,
-          phone: address.phone,
-          addressLine1: address.addressLine1,
-          city: address.city,
-          state: address.state,
-          postalCode: address.postalCode,
-          country: address.country,
-        },
-        items: {
-          createMany: {
-            data: [
-              { productId: waterId, productName: "Tender Coconut Water", size: "330ml", price: 120, quantity: 1, total: 120 },
-              { productId: oilId, productName: "Virgin Coconut Oil", size: "250ml", price: 340, quantity: 1, total: 340 },
-            ],
-          },
-        },
+    await OrderModel.create({
+      userId: demoCustomer._id,
+      orderNumber: generateOrderNumber(),
+      subtotal: 460,
+      discount: 60,
+      shippingCost: 0,
+      tax: 0,
+      totalAmount: 460,
+      paymentMethod: "UPI",
+      paymentStatus: "PAID",
+      orderStatus: "DELIVERED",
+      addressId: address._id,
+      shippingAddress: {
+        fullName: address.fullName,
+        phone: address.phone,
+        addressLine1: address.addressLine1,
+        city: address.city,
+        state: address.state,
+        postalCode: address.postalCode,
+        country: address.country,
       },
+      items: [
+        { product: waterId, productName: "Tender Coconut Water", size: "330ml", price: 120, quantity: 1, total: 120 },
+        { product: oilId, productName: "Virgin Coconut Oil", size: "250ml", price: 340, quantity: 1, total: 340 },
+      ],
     });
   }
 
@@ -462,5 +456,5 @@ main()
     process.exit(1);
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await disconnectDB();
   });

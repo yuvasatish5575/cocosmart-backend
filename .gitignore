@@ -2,8 +2,4 @@ node_modules
 dist
 .env
 .env.local
-.pgdata
 *.log
-
-# Never commit generated Prisma client output if the schema ever adds a custom output path.
-/generated

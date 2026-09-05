@@ -1,25 +1,21 @@
-import { cartRepository } from "../repositories/cartRepository";
+import { cartRepository, type CartWithItems } from "../repositories/cartRepository";
 import { productRepository } from "../repositories/productRepository";
 import { ApiError } from "../utils/ApiError";
 import { DELIVERY_FEE, FREE_DELIVERY_THRESHOLD } from "../config/constants";
 import type { AddCartItemInput } from "../types/dto";
-import type { Prisma } from "@prisma/client";
-
-type CartWithItems = Prisma.CartGetPayload<{
-  include: { items: { include: { product: { include: { category: true } } } } };
-}>;
 
 function present(cart: CartWithItems) {
   const lines = cart.items.map((item) => ({
-    key: item.id,
-    productId: item.productId,
+    key: item._id.toString(),
+    productId: item.product._id.toString(),
     slug: item.product.slug,
     name: item.product.name,
+    image: item.product.image ?? undefined,
     size: item.size,
-    price: Number(item.price),
+    price: item.price,
     qty: item.quantity,
     tone: item.product.tone,
-    lineTotal: Number(item.price) * item.quantity,
+    lineTotal: item.price * item.quantity,
     available: item.product.isActive && item.product.stockQuantity >= item.quantity,
     stockQuantity: item.product.stockQuantity,
   }));
@@ -27,7 +23,7 @@ function present(cart: CartWithItems) {
   const count = lines.reduce((sum, l) => sum + l.qty, 0);
   const delivery = count === 0 || subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE;
   return {
-    id: cart.id,
+    id: cart._id.toString(),
     lines,
     count,
     subtotal,
@@ -50,7 +46,7 @@ export const cartService = {
     }
 
     const cart = await cartRepository.getOrCreateForUser(userId);
-    const existing = await cartRepository.findItem(cart.id, input.productId, input.size);
+    const existing = cart.items.find((item) => item.product._id.toString() === input.productId && item.size === input.size);
     const desiredQty = (existing?.quantity ?? 0) + input.quantity;
 
     if (desiredQty > product.stockQuantity) {
@@ -58,12 +54,11 @@ export const cartService = {
     }
 
     if (existing) {
-      await cartRepository.incrementItem(existing.id, input.quantity);
+      await cartRepository.incrementItem(cart._id.toString(), existing._id.toString(), input.quantity);
     } else {
-      const effectivePrice = product.discountPrice ? Number(product.discountPrice) : Number(product.price);
-      await cartRepository.addItem({
-        cartId: cart.id,
-        productId: input.productId,
+      const effectivePrice = product.discountPrice ? product.discountPrice : product.price;
+      await cartRepository.addItem(cart._id.toString(), {
+        product: input.productId,
         size: input.size,
         quantity: input.quantity,
         price: effectivePrice,
@@ -74,34 +69,35 @@ export const cartService = {
   },
 
   async updateItem(userId: string, itemId: string, quantity: number) {
-    const item = await cartRepository.findItemById(itemId);
-    if (!item || item.cart.userId !== userId) throw ApiError.notFound("Cart item not found");
+    const cart = await cartRepository.findCartWithItem(userId, itemId);
+    if (!cart) throw ApiError.notFound("Cart item not found");
+    const item = cart.items.find((i) => i._id.toString() === itemId)!;
 
     if (quantity <= 0) {
-      await cartRepository.removeItem(itemId);
+      await cartRepository.removeItem(cart._id.toString(), itemId);
       return this.getCart(userId);
     }
 
-    const product = await productRepository.findById(item.productId);
+    const product = await productRepository.findById(item.product._id.toString());
     if (!product) throw ApiError.notFound("Product not found");
     if (quantity > product.stockQuantity) {
       throw ApiError.insufficientStock(`Only ${product.stockQuantity} unit(s) of "${product.name}" available`);
     }
 
-    await cartRepository.setItemQuantity(itemId, quantity);
+    await cartRepository.setItemQuantity(cart._id.toString(), itemId, quantity);
     return this.getCart(userId);
   },
 
   async removeItem(userId: string, itemId: string) {
-    const item = await cartRepository.findItemById(itemId);
-    if (!item || item.cart.userId !== userId) throw ApiError.notFound("Cart item not found");
-    await cartRepository.removeItem(itemId);
+    const cart = await cartRepository.findCartWithItem(userId, itemId);
+    if (!cart) throw ApiError.notFound("Cart item not found");
+    await cartRepository.removeItem(cart._id.toString(), itemId);
     return this.getCart(userId);
   },
 
   async clear(userId: string) {
     const cart = await cartRepository.getOrCreateForUser(userId);
-    await cartRepository.clear(cart.id);
+    await cartRepository.clear(cart._id.toString());
     return this.getCart(userId);
   },
 };
