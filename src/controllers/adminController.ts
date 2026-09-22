@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { adminService } from "../services/adminService";
+import { activityLogService } from "../services/activityLogService";
 import { userRepository } from "../repositories/userRepository";
 import { toSkipTake, paginationMeta } from "../utils/pagination";
 import { ok } from "../utils/apiResponse";
@@ -20,5 +21,10 @@ export const adminController = {
     const { skip, take } = toSkipTake(query);
     const [users, total] = await Promise.all([userRepository.list({ skip, take }), userRepository.count()]);
     ok(res, { users, pagination: paginationMeta(query, total) });
+  },
+
+  async activity(req: Request, res: Response) {
+    const query = pageQuerySchema.parse(req.query);
+    ok(res, await activityLogService.list(query));
   },
 };

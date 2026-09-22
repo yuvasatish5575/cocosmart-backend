@@ -1,17 +1,20 @@
 import { addressRepository } from "../repositories/addressRepository";
 import { ApiError } from "../utils/ApiError";
+import { toPublicAddress } from "../utils/presenters";
 import type { AddressInput, UpdateAddressInput } from "../types/dto";
 
 export const addressService = {
-  list(userId: string) {
-    return addressRepository.listForUser(userId);
+  async list(userId: string) {
+    const addresses = await addressRepository.listForUser(userId);
+    return addresses.map(toPublicAddress);
   },
 
   async create(userId: string, input: AddressInput) {
     if (input.isDefault) {
       await addressRepository.clearDefaultForUser(userId);
     }
-    return addressRepository.create(userId, input);
+    const address = await addressRepository.create(userId, input);
+    return toPublicAddress(address);
   },
 
   async update(userId: string, addressId: string, input: UpdateAddressInput) {
@@ -20,7 +23,8 @@ export const addressService = {
     if (input.isDefault) {
       await addressRepository.clearDefaultForUser(userId);
     }
-    return addressRepository.update(addressId, input);
+    const updated = await addressRepository.update(addressId, input);
+    return toPublicAddress(updated!);
   },
 
   async remove(userId: string, addressId: string) {

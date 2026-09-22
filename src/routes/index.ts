@@ -7,6 +7,7 @@ import { addressRoutes } from "./addressRoutes";
 import { orderRoutes } from "./orderRoutes";
 import { wishlistRoutes } from "./wishlistRoutes";
 import { adminRoutes } from "./adminRoutes";
+import { uploadRoutes } from "./uploadRoutes";
 
 export const apiRouter = Router();
 
@@ -18,3 +19,4 @@ apiRouter.use("/addresses", addressRoutes);
 apiRouter.use("/orders", orderRoutes);
 apiRouter.use("/wishlist", wishlistRoutes);
 apiRouter.use("/admin", adminRoutes);
+apiRouter.use("/uploads", uploadRoutes);

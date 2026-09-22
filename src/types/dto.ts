@@ -1,5 +1,12 @@
 import type { z } from "zod";
-import type { registerSchema, loginSchema } from "../validators/authValidators";
+import type {
+  registerSchema,
+  loginSchema,
+  verifyEmailSchema,
+  resendCodeSchema,
+  loginOtpRequestSchema,
+  loginOtpVerifySchema,
+} from "../validators/authValidators";
 import type { createProductSchema, updateProductSchema, productListQuerySchema } from "../validators/productValidators";
 import type { createCategorySchema, updateCategorySchema } from "../validators/categoryValidators";
 import type { addCartItemSchema, updateCartItemSchema } from "../validators/cartValidators";
@@ -8,6 +15,10 @@ import type { checkoutSchema, orderListQuerySchema } from "../validators/orderVa
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
+export type ResendCodeInput = z.infer<typeof resendCodeSchema>;
+export type LoginOtpRequestInput = z.infer<typeof loginOtpRequestSchema>;
+export type LoginOtpVerifyInput = z.infer<typeof loginOtpVerifySchema>;
 
 export type CreateProductInput = z.infer<typeof createProductSchema>;
 export type UpdateProductInput = z.infer<typeof updateProductSchema>;

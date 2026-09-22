@@ -1,9 +1,11 @@
 import type { Types } from "mongoose";
 import { stockLabel } from "./productPresentation";
 import type { UserDoc } from "../models/User";
+import type { AddressDoc } from "../models/Address";
 import type { CategoryDoc } from "../models/Category";
 import type { OrderDoc, OrderItemDoc } from "../models/Order";
 import type { ProductWithCategory } from "../repositories/productRepository";
+import type { ActivityLogWithAdmin } from "../repositories/activityLogRepository";
 
 type Id = Types.ObjectId | string;
 
@@ -29,6 +31,7 @@ export function toPublicProduct(product: ProductWithCategory) {
     price: effectivePrice,
     mrp: discountPrice ? price : undefined,
     sku: product.sku,
+    unit: product.unit,
     sizes: product.sizes,
     rating: product.rating,
     reviewCount: product.reviewCount,
@@ -47,6 +50,23 @@ export function toPublicProduct(product: ProductWithCategory) {
     isActive: product.isActive,
     createdAt: product.createdAt,
     updatedAt: product.updatedAt,
+  };
+}
+
+export function toPublicAddress(address: AddressDoc) {
+  return {
+    id: address._id.toString(),
+    fullName: address.fullName,
+    phone: address.phone,
+    addressLine1: address.addressLine1,
+    addressLine2: address.addressLine2 ?? undefined,
+    city: address.city,
+    state: address.state,
+    postalCode: address.postalCode,
+    country: address.country,
+    isDefault: address.isDefault,
+    createdAt: address.createdAt,
+    updatedAt: address.updatedAt,
   };
 }
 
@@ -121,5 +141,23 @@ export function toPublicUser(user: UserDoc) {
     phone: user.phone ?? undefined,
     role: user.role,
     createdAt: user.createdAt,
+  };
+}
+
+export function toActivityLogEntry(entry: ActivityLogWithAdmin) {
+  const admin =
+    entry.adminId && typeof entry.adminId === "object" && "name" in entry.adminId
+      ? { id: entry.adminId._id.toString(), name: entry.adminId.name, email: entry.adminId.email }
+      : undefined;
+
+  return {
+    id: entry._id.toString(),
+    admin,
+    action: entry.action,
+    entityType: entry.entityType,
+    entityId: entry.entityId.toString(),
+    entityName: entry.entityName,
+    detail: entry.detail ?? undefined,
+    createdAt: entry.createdAt,
   };
 }

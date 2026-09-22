@@ -32,3 +32,6 @@ if (!parsed.success) {
 export const env = parsed.data;
 export const isProduction = env.NODE_ENV === "production";
 export const isTest = env.NODE_ENV === "test";
+
+/** FRONTEND_URL is a comma-separated list of allowed CORS origins — the first one is where user-facing links (e.g. a password-reset email) should point. */
+export const primaryFrontendUrl = env.FRONTEND_URL.split(",")[0]!.trim();

@@ -1,5 +1,6 @@
 import { productRepository } from "../repositories/productRepository";
 import { categoryRepository } from "../repositories/categoryRepository";
+import { orderRepository } from "../repositories/orderRepository";
 import { ApiError } from "../utils/ApiError";
 import { toPublicProduct } from "../utils/presenters";
 import { paginationMeta, toSkipTake } from "../utils/pagination";
@@ -84,10 +85,22 @@ export const productService = {
     return toPublicProduct(product!);
   },
 
-  /** Soft delete — deactivates rather than hard-deletes so historical orders keep a valid product reference. */
-  async deactivate(id: string) {
+  /**
+   * Permanently deletes the product — only when it's safe to: a product that
+   * has ever appeared in an order can't be erased without leaving that
+   * order's line items pointing at nothing, so it's blocked there and the
+   * caller is pointed at deactivation instead.
+   */
+  async remove(id: string) {
     const existing = await productRepository.findById(id);
     if (!existing) throw ApiError.notFound("Product not found");
-    await productRepository.softDelete(id);
+
+    const hasOrders = await orderRepository.hasOrderForProduct(id);
+    if (hasOrders) {
+      throw ApiError.conflict("Cannot delete a product that has order history. Deactivate it instead.");
+    }
+
+    await productRepository.delete(id);
+    return { id, name: existing.name };
   },
 };

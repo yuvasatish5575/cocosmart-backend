@@ -1,5 +1,5 @@
 import rateLimit from "express-rate-limit";
-import { isTest } from "../config/env";
+import { isProduction } from "../config/env";
 
 /** Applied only to auth endpoints — slows down credential-stuffing/brute-force attempts. */
 export const authRateLimiter = rateLimit({
@@ -7,8 +7,10 @@ export const authRateLimiter = rateLimit({
   limit: 20,
   standardHeaders: true,
   legacyHeaders: false,
-  // The test suite legitimately calls /auth/* far more than 20 times per run.
-  skip: () => isTest,
+  // The automated test suite and local/manual dev testing both legitimately
+  // call /auth/* far more than 20 times in 15 minutes — only production
+  // traffic needs this protection.
+  skip: () => !isProduction,
   message: {
     success: false,
     error: { code: "RATE_LIMITED", message: "Too many attempts. Please try again later." },

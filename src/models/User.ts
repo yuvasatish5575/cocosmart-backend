@@ -14,6 +14,7 @@ export interface UserDoc {
   phone?: string;
   role: Role;
   isActive: boolean;
+  emailVerified: boolean;
   wishlist: WishlistEntry[];
   createdAt: Date;
   updatedAt: Date;
@@ -35,6 +36,7 @@ const userSchema = new Schema<UserDoc>(
     phone: { type: String },
     role: { type: String, enum: ROLES, default: "CUSTOMER" },
     isActive: { type: Boolean, default: true },
+    emailVerified: { type: Boolean, default: false },
     wishlist: { type: [wishlistEntrySchema], default: [] },
   },
   { timestamps: true, collection: "users" }

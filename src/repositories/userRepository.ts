@@ -10,7 +10,7 @@ export const userRepository = {
   create(data: Pick<UserDoc, "name" | "email" | "passwordHash"> & Partial<Pick<UserDoc, "phone" | "role">>) {
     return UserModel.create(data).then((doc) => doc.toObject());
   },
-  update(id: string, data: Partial<Pick<UserDoc, "name" | "phone" | "passwordHash" | "isActive">>) {
+  update(id: string, data: Partial<Pick<UserDoc, "name" | "phone" | "passwordHash" | "isActive" | "emailVerified">>) {
     return UserModel.findByIdAndUpdate(id, data, { new: true }).lean();
   },
   async list(params: { skip: number; take: number }) {

@@ -9,7 +9,7 @@ export const categoryRoutes = Router();
 
 /**
  * @openapi
- * /api/categories:
+ * /categories:
  *   get:
  *     tags: [Categories]
  *     summary: List categories (active only, unless called by an admin)

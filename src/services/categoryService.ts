@@ -32,5 +32,6 @@ export const categoryService = {
       throw ApiError.conflict(`Cannot delete a category with ${productCount} product(s). Deactivate it instead.`);
     }
     await categoryRepository.delete(id);
+    return { id, name: existing.name };
   },
 };

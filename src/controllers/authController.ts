@@ -31,12 +31,32 @@ export const authController = {
   },
 
   async forgotPassword(req: Request, res: Response) {
-    await authService.requestPasswordReset(req.body.email);
+    await authService.requestPasswordReset(req.body.email, req.body.redirectUrl);
     ok(res, { message: "If an account exists for that email, we've sent a reset link." });
   },
 
   async resetPassword(req: Request, res: Response) {
     await authService.resetPassword(req.body.token, req.body.password);
     ok(res, { message: "Password updated. You can now sign in." });
+  },
+
+  async verifyEmail(req: Request, res: Response) {
+    const result = await authService.verifyEmail(req.body.email, req.body.code);
+    ok(res, result);
+  },
+
+  async resendCode(req: Request, res: Response) {
+    const result = await authService.resendVerificationCode(req.body.email);
+    ok(res, result);
+  },
+
+  async requestLoginOtp(req: Request, res: Response) {
+    const result = await authService.requestLoginOtp(req.body.email);
+    ok(res, result);
+  },
+
+  async loginWithOtp(req: Request, res: Response) {
+    const result = await authService.loginWithOtp(req.body.email, req.body.code);
+    ok(res, result);
   },
 };

@@ -95,7 +95,7 @@ const traceCT24082A = {
 const traceUnavailable = { available: false };
 
 // Local catalogue photography (backend/public equivalent: served from the
-// frontend's public/product-images/). Only these four products have real
+// frontend's public/product-images/). Only these products have real
 // photography right now; the rest explicitly clear image/images so a
 // re-seed can't leave a stale reference to a file that doesn't exist —
 // they fall back to the illustrated placeholder (see ProductMedia).
@@ -107,8 +107,8 @@ const productMedia: Record<string, { image: string | null; images: string[] }> =
   "virgin-coconut-oil": { image: "/product-images/virgin-coconut-oil.png", images: ["/product-images/virgin-coconut-oil.png"] },
   "coconut-oil-family-pack": { image: "/product-images/virgin-coconut-oil.png", images: ["/product-images/virgin-coconut-oil.png"] },
   "coconut-milk-powder": { image: "/product-images/coconut-powder.png", images: ["/product-images/coconut-powder.png"] },
-  "coconut-flour": { image: null, images: [] },
-  "coconut-cream": { image: null, images: [] },
+  "coconut-flour": { image: "/product-images/coconut-flour.png", images: ["/product-images/coconut-flour.png"] },
+  "coconut-cream": { image: "/product-images/coconut-cream.png", images: ["/product-images/coconut-cream.png"] },
 };
 
 const products = [
@@ -379,7 +379,17 @@ async function main() {
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe123!";
   await UserModel.findOneAndUpdate(
     { email: adminEmail },
-    { $setOnInsert: { name: "CocoSmart Admin", email: adminEmail, passwordHash: await hashPassword(adminPassword), role: "ADMIN" } },
+    {
+      $setOnInsert: {
+        name: "CocoSmart Admin",
+        email: adminEmail,
+        passwordHash: await hashPassword(adminPassword),
+        role: "ADMIN",
+      },
+      // Always force-verified, even for a pre-existing account from before
+      // email verification existed — a seeded admin should never be locked out.
+      $set: { emailVerified: true },
+    },
     { upsert: true, new: true }
   );
 
@@ -393,6 +403,7 @@ async function main() {
         role: "CUSTOMER",
         phone: "9876543210",
       },
+      $set: { emailVerified: true },
     },
     { upsert: true, new: true }
   );

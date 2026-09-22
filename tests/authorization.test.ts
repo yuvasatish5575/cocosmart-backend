@@ -1,17 +1,27 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
 import { app, registerCustomer, loginAsAdmin, authHeader, unique } from "./helpers";
+import { emailService } from "../src/services/emailService";
 
 describe("Authorization boundaries", () => {
   it("cannot self-assign the ADMIN role through registration", async () => {
     const email = `${unique("wannabe-admin")}@example.com`;
+    const password = "Passw0rd!23";
+
+    const spy = vi.spyOn(emailService, "sendVerificationEmail");
     const res = await request(app)
       .post("/api/auth/register")
       // `role` isn't part of the registration schema — sending it should have zero effect.
-      .send({ name: "Wannabe Admin", email, password: "Passw0rd!23", role: "ADMIN" });
-
+      .send({ name: "Wannabe Admin", email, password, confirmPassword: password, role: "ADMIN" });
     expect(res.status).toBe(201);
-    expect(res.body.data.user.role).toBe("CUSTOMER");
+    const code = spy.mock.calls.at(-1)?.[1];
+    spy.mockRestore();
+
+    await request(app).post("/api/auth/verify-email").send({ email, code });
+    const login = await request(app).post("/api/auth/login").send({ email, password });
+
+    expect(login.status).toBe(200);
+    expect(login.body.data.user.role).toBe("CUSTOMER");
   });
 
   const adminOnlyEndpoints = ["/api/admin/dashboard", "/api/admin/users", "/api/admin/orders", "/api/products/admin"];

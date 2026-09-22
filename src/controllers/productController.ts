@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { productService } from "../services/productService";
+import { activityLogService } from "../services/activityLogService";
 import { ok, created, noContent } from "../utils/apiResponse";
 
 export const productController = {
@@ -25,16 +26,19 @@ export const productController = {
 
   async create(req: Request, res: Response) {
     const product = await productService.create(req.body);
+    if (req.user) await activityLogService.record(req.user.id, "PRODUCT_CREATED", "PRODUCT", product.id, product.name);
     created(res, product);
   },
 
   async update(req: Request, res: Response) {
     const product = await productService.update(req.params.id as string, req.body);
+    if (req.user) await activityLogService.record(req.user.id, "PRODUCT_UPDATED", "PRODUCT", product.id, product.name);
     ok(res, product);
   },
 
   async remove(req: Request, res: Response) {
-    await productService.deactivate(req.params.id as string);
+    const removed = await productService.remove(req.params.id as string);
+    if (req.user) await activityLogService.record(req.user.id, "PRODUCT_DELETED", "PRODUCT", removed.id, removed.name);
     noContent(res);
   },
 };

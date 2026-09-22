@@ -10,7 +10,7 @@ orderRoutes.use(authenticate);
 
 /**
  * @openapi
- * /api/orders:
+ * /orders:
  *   post:
  *     tags: [Orders]
  *     summary: Checkout — turns the current cart into an order
@@ -35,7 +35,7 @@ orderRoutes.get("/", validate({ query: orderListQuerySchema }), orderController.
 
 /**
  * @openapi
- * /api/orders/{id}:
+ * /orders/{id}:
  *   get:
  *     tags: [Orders]
  *     summary: Get one of the current user's orders by id

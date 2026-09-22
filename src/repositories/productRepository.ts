@@ -143,10 +143,6 @@ export const productRepository = {
     return result.matchedCount > 0;
   },
 
-  softDelete(id: string) {
-    return ProductModel.findByIdAndUpdate(id, { isActive: false });
-  },
-
   delete(id: string) {
     return ProductModel.findByIdAndDelete(id);
   },

@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import mongoose from "mongoose";
+import { MulterError } from "multer";
 import { ZodError } from "zod";
 import { ApiError } from "../utils/ApiError";
 import { logger } from "../config/logger";
@@ -32,6 +33,10 @@ function toApiError(err: unknown): ApiError {
 
   if (err instanceof ZodError) {
     return ApiError.badRequest("Validation failed", err.flatten());
+  }
+
+  if (err instanceof MulterError) {
+    return ApiError.badRequest(err.code === "LIMIT_FILE_SIZE" ? "Image must be 5MB or smaller" : err.message);
   }
 
   if (err instanceof mongoose.Error.CastError) {

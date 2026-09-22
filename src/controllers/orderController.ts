@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { orderService } from "../services/orderService";
+import { activityLogService } from "../services/activityLogService";
 import { ok, created } from "../utils/apiResponse";
 import { ApiError } from "../utils/ApiError";
 
@@ -34,6 +35,10 @@ export const orderController = {
   },
 
   async updateStatus(req: Request, res: Response) {
-    ok(res, await orderService.updateStatus(req.params.id as string, req.body.orderStatus));
+    const order = await orderService.updateStatus(req.params.id as string, req.body.orderStatus);
+    if (req.user) {
+      await activityLogService.record(req.user.id, "ORDER_STATUS_UPDATED", "ORDER", order.id, order.orderNumber, `→ ${order.orderStatus}`);
+    }
+    ok(res, order);
   },
 };

@@ -9,7 +9,7 @@ cartRoutes.use(authenticate);
 
 /**
  * @openapi
- * /api/cart:
+ * /cart:
  *   get:
  *     tags: [Cart]
  *     summary: Get the current user's cart, with server-computed totals
@@ -28,7 +28,7 @@ cartRoutes.delete("/", cartController.clear);
 
 /**
  * @openapi
- * /api/cart/items:
+ * /cart/items:
  *   post:
  *     tags: [Cart]
  *     summary: Add a product/size to the cart
@@ -52,7 +52,7 @@ cartRoutes.post("/items", validate({ body: addCartItemSchema }), cartController.
 
 /**
  * @openapi
- * /api/cart/items/{id}:
+ * /cart/items/{id}:
  *   patch:
  *     tags: [Cart]
  *     summary: Update a cart line's quantity (0 removes it)

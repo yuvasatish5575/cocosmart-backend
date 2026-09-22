@@ -5,6 +5,8 @@ export type ErrorCode =
   | "NOT_FOUND"
   | "CONFLICT"
   | "INSUFFICIENT_STOCK"
+  | "EMAIL_NOT_VERIFIED"
+  | "TOO_MANY_REQUESTS"
   | "INTERNAL_ERROR";
 
 /**
@@ -42,6 +44,12 @@ export class ApiError extends Error {
   }
   static insufficientStock(message = "Not enough stock available") {
     return new ApiError(409, "INSUFFICIENT_STOCK", message);
+  }
+  static emailNotVerified(message = "Please verify your email before signing in") {
+    return new ApiError(403, "EMAIL_NOT_VERIFIED", message);
+  }
+  static tooManyRequests(message: string, details?: unknown) {
+    return new ApiError(429, "TOO_MANY_REQUESTS", message, details);
   }
   static internal(message = "Something went wrong") {
     return new ApiError(500, "INTERNAL_ERROR", message);

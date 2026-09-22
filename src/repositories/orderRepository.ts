@@ -43,7 +43,9 @@ export const orderRepository = {
     return [rows, total] as const;
   },
   updateStatus(id: string, orderStatus: OrderStatus) {
-    return OrderModel.findByIdAndUpdate(id, { orderStatus }, { new: true }).lean();
+    return OrderModel.findByIdAndUpdate(id, { orderStatus }, { new: true })
+      .populate<{ userId: OrderCustomer }>({ path: "userId", select: "name email" })
+      .lean();
   },
   recentForDashboard(take = 5) {
     return OrderModel.find()
@@ -64,5 +66,8 @@ export const orderRepository = {
   },
   count() {
     return OrderModel.countDocuments();
+  },
+  async hasOrderForProduct(productId: string) {
+    return (await OrderModel.exists({ "items.product": productId })) !== null;
   },
 };

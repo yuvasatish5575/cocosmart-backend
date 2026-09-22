@@ -12,7 +12,7 @@ adminRoutes.use(authenticate, authorize("ADMIN"));
 
 /**
  * @openapi
- * /api/admin/dashboard:
+ * /admin/dashboard:
  *   get:
  *     tags: [Admin]
  *     summary: Aggregate store statistics (revenue, orders, customers, low stock, recent orders)
@@ -25,7 +25,7 @@ adminRoutes.get("/analytics", adminController.dashboard);
 
 /**
  * @openapi
- * /api/admin/users:
+ * /admin/users:
  *   get:
  *     tags: [Admin]
  *     summary: List customer accounts
@@ -35,11 +35,23 @@ adminRoutes.get("/analytics", adminController.dashboard);
  */
 adminRoutes.get("/users", adminController.listUsers);
 
+/**
+ * @openapi
+ * /admin/activity:
+ *   get:
+ *     tags: [Admin]
+ *     summary: Audit log of admin actions (who created/updated/removed what)
+ *     security: [{ bearerAuth: [] }]
+ *     responses:
+ *       200: { description: Paginated activity log }
+ */
+adminRoutes.get("/activity", adminController.activity);
+
 adminRoutes.get("/products", validate({ query: productListQuerySchema }), productController.listAdmin);
 
 /**
  * @openapi
- * /api/admin/orders:
+ * /admin/orders:
  *   get:
  *     tags: [Admin]
  *     summary: List all orders across every customer
@@ -56,7 +68,7 @@ adminRoutes.get("/orders/:id", validate({ params: idParamSchema }), orderControl
 
 /**
  * @openapi
- * /api/admin/orders/{id}/status:
+ * /admin/orders/{id}/status:
  *   patch:
  *     tags: [Admin]
  *     summary: Update an order's fulfilment status

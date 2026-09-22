@@ -8,7 +8,7 @@ export const productRoutes = Router();
 
 /**
  * @openapi
- * /api/products:
+ * /products:
  *   get:
  *     tags: [Products]
  *     summary: List active products
@@ -36,7 +36,7 @@ productRoutes.get("/", validate({ query: productListQuerySchema }), productContr
 
 /**
  * @openapi
- * /api/products/admin:
+ * /products/admin:
  *   get:
  *     tags: [Products]
  *     summary: List all products, including inactive (admin only)
@@ -50,7 +50,7 @@ productRoutes.get("/id/:id", authenticate, authorize("ADMIN"), validate({ params
 
 /**
  * @openapi
- * /api/products/slug/{slug}:
+ * /products/slug/{slug}:
  *   get:
  *     tags: [Products]
  *     summary: Get an active product by slug
@@ -67,7 +67,7 @@ productRoutes.get("/slug/:slug", validate({ params: slugParamSchema }), productC
 
 /**
  * @openapi
- * /api/products:
+ * /products:
  *   post:
  *     tags: [Products]
  *     summary: Create a product (admin only)
@@ -80,7 +80,7 @@ productRoutes.post("/", authenticate, authorize("ADMIN"), validate({ body: creat
 
 /**
  * @openapi
- * /api/products/{id}:
+ * /products/{id}:
  *   put:
  *     tags: [Products]
  *     summary: Update a product (admin only)
@@ -94,7 +94,7 @@ productRoutes.post("/", authenticate, authorize("ADMIN"), validate({ body: creat
  *       200: { description: Product updated }
  *   delete:
  *     tags: [Products]
- *     summary: Deactivate a product (admin only)
+ *     summary: Permanently delete a product (admin only) — blocked with 409 if it has order history; deactivate it instead (PATCH isActive)
  *     security: [{ bearerAuth: [] }]
  *     parameters:
  *       - in: path
@@ -102,7 +102,8 @@ productRoutes.post("/", authenticate, authorize("ADMIN"), validate({ body: creat
  *         required: true
  *         schema: { type: string, format: uuid }
  *     responses:
- *       204: { description: Deactivated }
+ *       204: { description: Deleted }
+ *       409: { description: Product has order history — deactivate instead }
  */
 productRoutes.put(
   "/:id",
